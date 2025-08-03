@@ -7,8 +7,18 @@ import factualIcon from "@/assets/factual-icon.png";
 const HeroSection = () => {
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 hero-gradient">
+      {/* Background Video */}
+      <video 
+        autoPlay 
+        muted 
+        loop 
+        className="absolute inset-0 w-full h-full object-cover opacity-20 z-0"
+      >
+        <source src="/intro.mp4" type="video/mp4" />
+      </video>
+      
       {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden z-1">
         <div className="absolute top-20 left-10 w-4 h-4 bg-primary/30 rounded-full neural-float" style={{ animationDelay: '0s' }}></div>
         <div className="absolute top-40 right-20 w-6 h-6 bg-accent/40 rounded-full neural-float" style={{ animationDelay: '2s' }}></div>
         <div className="absolute bottom-40 left-1/4 w-3 h-3 bg-primary/50 rounded-full neural-float" style={{ animationDelay: '4s' }}></div>
