@@ -1,0 +1,12 @@
+{
+  "api_key": "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",
+  "model": "gpt-4o-mini",
+  "temperature": 0.7,
+  "max_iterations": 15,
+  "auto_approve_reads": true,
+  "auto_approve_writes": true,
+  "auto_approve_deletes": true,
+  "auto_approve_terminal": true,
+  "max_tokens": 4096,
+  "workspace_root": ""
+}
