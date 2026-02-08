@@ -56,3 +56,11 @@ data/truthfulness_dataset.json
 
 # Archives
 *.tar.gz
+
+# RunPod specific
+*.log
+/workspace/
+.env
+backend.log
+frontend.log
+
