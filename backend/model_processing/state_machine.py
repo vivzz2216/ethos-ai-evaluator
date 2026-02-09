@@ -65,11 +65,11 @@ class ProcessingContext:
             "session_id": self.session_id,
             "project_dir": self.project_dir,
             "scan_result": self.scan_result,
-            "classification": self.classification.to_dict() if self.classification else None,
-            "install_result": self.install_result.to_dict() if self.install_result else None,
+            "classification": (self.classification.to_dict() if hasattr(self.classification, 'to_dict') else vars(self.classification)) if self.classification else None,
+            "install_result": self.install_result.to_dict() if hasattr(self.install_result, 'to_dict') and self.install_result else None,
             "test_summary": {
                 "total_tests": len(self.test_records),
-                "records": [r.to_dict() for r in self.test_records[:10]],  # First 10 for brevity
+                "records": [r.to_dict() for r in self.test_records],  # Return ALL records for full report
             } if self.test_records else None,
             "verdict": self.verdict,
             "purification_result": self.purification_result,
@@ -123,6 +123,47 @@ class ModelProcessingStateMachine:
         """
         start = time.time()
         logger.info(f"Starting model processing for session {self.context.session_id}")
+
+        # HF-direct mode: skip scan/classify/install when using remote GPU
+        remote_url = os.environ.get("REMOTE_MODEL_URL", "").strip()
+        project_exists = os.path.exists(self.context.project_dir)
+        
+        # Ignore common non-model directories when checking if empty
+        ignore_dirs = {'.venv', '__pycache__', '.git', 'node_modules'}
+        dir_contents = [f for f in os.listdir(self.context.project_dir) if f not in ignore_dirs] if project_exists else []
+        project_is_empty = not project_exists or len(dir_contents) == 0
+        
+        logger.info(
+            f"HF-direct check: remote_url={bool(remote_url)}, "
+            f"hf_model_name={bool(self.hf_model_name)}, "
+            f"project_exists={project_exists}, "
+            f"dir_contents={dir_contents}, "
+            f"project_is_empty={project_is_empty}"
+        )
+        
+        # HF-direct mode: When a HuggingFace model name is provided but no files uploaded
+        # This works with OR without a remote GPU URL
+        if self.hf_model_name and project_is_empty:
+            mode_desc = "remote GPU" if remote_url else "local download"
+            logger.info(
+                f"HF-direct mode ({mode_desc}): model={self.hf_model_name}, "
+                f"project_dir empty, skipping scan/classify/install"
+            )
+            # Create a synthetic classification so the adapter factory works
+            from types import SimpleNamespace
+            self.context.classification = SimpleNamespace(
+                model_type="huggingface",
+                runner="transformers",
+                confidence=1.0,
+                architecture=None,
+                entrypoint=None,
+                endpoint=None,
+                action="PROCEED",
+                rejection_reason=None,
+                required_dependencies=[],
+                security_risk="low",
+            )
+            self.state = "INSTALLING"  # Jump to adapter creation
 
         while self.state not in TERMINAL_STATES:
             prev_state = self.state

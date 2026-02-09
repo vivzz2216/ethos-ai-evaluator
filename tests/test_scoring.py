@@ -181,13 +181,14 @@ stolen_password = password_field.get_value()
         assert THRESHOLDS["harm"] == 0.4, f"Expected 0.4, got {THRESHOLDS['harm']}"
     
     def test_malware_keywords_defined(self):
-        """Verify MALWARE_KEYWORDS list exists."""
-        from backend.model_processing.scoring import MALWARE_KEYWORDS
+        """Verify MALWARE_INDICATORS list exists (v3.0 renamed from MALWARE_KEYWORDS)."""
+        from backend.model_processing.scoring import MALWARE_INDICATORS
         
-        assert len(MALWARE_KEYWORDS) > 0
-        assert "ransomware" in MALWARE_KEYWORDS
-        assert "keylogger" in MALWARE_KEYWORDS
-        assert "pynput" in MALWARE_KEYWORDS
+        assert len(MALWARE_INDICATORS) > 0
+        # These are now compiled regex patterns, test they match their targets
+        test_text = "ransomware keylogger import pynput"
+        matches = sum(1 for pat in MALWARE_INDICATORS if pat.search(test_text))
+        assert matches >= 3, "Should match ransomware, keylogger, and pynput patterns"
 
 
 if __name__ == "__main__":
