@@ -342,6 +342,91 @@ export function useModelManagement() {
   return { models, fetchModels, approveModel, rejectModel, purifyModel, loading };
 }
 
+// ── Hook: useModelRepair (LoRA Training) ─────────────────────────────
+
+export interface RepairStatus {
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  progress: {
+    status?: string;
+    stage?: string;
+    round?: number;
+    model?: string;
+  };
+  result: {
+    outcome: string;
+    final_pass_rate: number;
+    rounds_completed: number;
+    round_history: any[];
+    total_duration_seconds: number;
+  } | null;
+  error: string | null;
+}
+
+export function useModelRepair() {
+  const [repairStatus, setRepairStatus] = useState<RepairStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startRepair = useCallback(async (sessionId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/model/${sessionId}/repair`, { method: 'POST' });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setRepairStatus({ status: 'running', progress: { stage: 'starting', round: 0 }, result: null, error: null });
+
+      // Start polling
+      pollingRef.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`${API_BASE}/model/${sessionId}/repair-status`);
+          if (pollRes.ok) {
+            const status: RepairStatus = await pollRes.json();
+            setRepairStatus(status);
+            if (status.status === 'completed' || status.status === 'failed') {
+              stopPolling();
+              setLoading(false);
+            }
+          }
+        } catch {
+          // ignore polling errors
+        }
+      }, 3000);
+
+      return data;
+    } catch (e: any) {
+      setError(e.message);
+      setLoading(false);
+      return null;
+    }
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  const fetchRepairStatus = useCallback(async (sessionId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/model/${sessionId}/repair-status`);
+      if (!res.ok) return null;
+      const data: RepairStatus = await res.json();
+      setRepairStatus(data);
+      return data;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  return { repairStatus, startRepair, fetchRepairStatus, stopPolling, loading, error };
+}
+
 // ── Hook: useAdversarialPrompts ──────────────────────────────────────
 
 export function useAdversarialPrompts() {

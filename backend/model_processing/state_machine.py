@@ -32,6 +32,7 @@ STATES = [
     "TESTING",
     "SCORED",
     "FIXING",
+    "LORA_TRAINING",
     "RETESTING",
     "APPROVED",
     "REJECTED",
@@ -202,6 +203,7 @@ class ModelProcessingStateMachine:
             "TESTING": self._score_results,
             "SCORED": self._decide_action,
             "FIXING": self._apply_purification,
+            "LORA_TRAINING": self._run_lora_training,
             "RETESTING": self._final_verdict,
         }.get(self.state)
 
@@ -411,7 +413,7 @@ class ModelProcessingStateMachine:
             self._transition("ERROR")
 
     def _apply_purification(self):
-        """FIXING → RETESTING: Apply safety wrappers and re-test."""
+        """FIXING → LORA_TRAINING or RETESTING: Apply LoRA repair or safety wrappers."""
         adapter = self.context.adapter
         if not adapter:
             self._transition("ERROR")
@@ -424,7 +426,19 @@ class ModelProcessingStateMachine:
             self._transition("APPROVED")
             return
 
-        # Purify
+        # Check if RunPod is available for LoRA repair
+        remote_url = os.environ.get("REMOTE_MODEL_URL", "").strip()
+        if remote_url and self.hf_model_name:
+            try:
+                from .purification_controller import PurificationController
+                logger.info("RunPod available — using LoRA repair loop")
+                self._transition("LORA_TRAINING")
+                return
+            except ImportError:
+                logger.warning("PurificationController not available, falling back to wrapper")
+
+        # Fallback: prompt-side safety wrapper
+        logger.info("No RunPod — using safety wrapper purification")
         purified = self.purifier.purify(adapter, violations, strategy="auto")
         self.context.purified_adapter = purified
 
@@ -433,6 +447,63 @@ class ModelProcessingStateMachine:
         self.context.purification_result = verification
 
         self._transition("RETESTING")
+
+    def _run_lora_training(self):
+        """LORA_TRAINING → RETESTING: Run LoRA repair loop on RunPod."""
+        from .purification_controller import PurificationController
+
+        remote_url = os.environ.get("REMOTE_MODEL_URL", "").strip()
+        if not remote_url or not self.hf_model_name:
+            self._transition("ERROR")
+            return
+
+        adapter = self.context.adapter
+        if not adapter:
+            self._transition("ERROR")
+            return
+
+        try:
+            controller = PurificationController(
+                endpoint=remote_url,
+                model_name=self.hf_model_name,
+            )
+
+            result = controller.run(
+                adapter=adapter,
+                max_test_prompts=self.max_test_prompts,
+            )
+
+            # Store result
+            self.context.purification_result = {
+                "passed": result["outcome"] == "ACCEPTED",
+                "outcome": result["outcome"],
+                "final_pass_rate": result["final_pass_rate"],
+                "rounds_completed": result["rounds_completed"],
+                "fix_rate": result["final_pass_rate"],
+                "round_history": result["round_history"],
+                "total_retested": result.get("round_history", [{}])[-1].get("total_tests", 0) if result.get("round_history") else 0,
+                "still_failing": result.get("round_history", [{}])[-1].get("fail_count", 0) if result.get("round_history") else 0,
+            }
+
+            logger.info(
+                f"LoRA repair complete: outcome={result['outcome']}, "
+                f"pass_rate={result['final_pass_rate']}%"
+            )
+
+            self._transition("RETESTING")
+
+        except Exception as e:
+            logger.error(f"LoRA training failed: {e}")
+            self.context.errors.append(f"LoRA training failed: {str(e)}")
+
+            # Fallback to safety wrapper
+            logger.info("Falling back to safety wrapper purification")
+            violations = [r for r in self.context.test_records if r.verdict == "FAIL"]
+            purified = self.purifier.purify(self.context.adapter, violations, strategy="auto")
+            self.context.purified_adapter = purified
+            verification = self.purifier.verify_purification(purified, violations)
+            self.context.purification_result = verification
+            self._transition("RETESTING")
 
     def _final_verdict(self):
         """RETESTING → APPROVED/REJECTED: Final decision after purification."""

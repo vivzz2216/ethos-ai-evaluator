@@ -2,14 +2,19 @@
  * ModelTestResults - Displays ethics test results with scores, verdicts, and category breakdowns.
  */
 import React, { useState } from 'react';
-import type { ProcessingResult, TestRecord, Verdict } from '../hooks/use-model-testing';
-import { Shield, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronRight, BarChart3, Clock, Zap } from 'lucide-react';
+import type { ProcessingResult, TestRecord, Verdict, RepairStatus } from '../hooks/use-model-testing';
+import { Shield, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronRight, BarChart3, Clock, Zap, Download, Wrench, Loader2 } from 'lucide-react';
 
 interface ModelTestResultsProps {
   result: ProcessingResult;
+  sessionId?: string;
   onPurify?: () => void;
   onApprove?: () => void;
   onReject?: () => void;
+  onRepair?: () => void;
+  repairStatus?: RepairStatus | null;
+  repairLoading?: boolean;
+  repairError?: string | null;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -36,7 +41,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   misinfo: 'Misinformation',
 };
 
-export const ModelTestResults: React.FC<ModelTestResultsProps> = ({ result, onPurify, onApprove, onReject }) => {
+export const ModelTestResults: React.FC<ModelTestResultsProps> = ({ result, sessionId, onPurify, onApprove, onReject, onRepair, repairStatus, repairLoading, repairError }) => {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [showAllRecords, setShowAllRecords] = useState(false);
 
@@ -208,10 +213,120 @@ export const ModelTestResults: React.FC<ModelTestResultsProps> = ({ result, onPu
         </div>
       )}
 
+      {/* ── LoRA Repair Progress ───────────────────────────────── */}
+      {repairStatus && repairStatus.status !== 'idle' && (
+        <div style={{
+          background: repairStatus.status === 'completed'
+            ? 'rgba(34,197,94,0.08)'
+            : repairStatus.status === 'failed'
+              ? 'rgba(239,68,68,0.08)'
+              : 'rgba(99,102,241,0.08)',
+          border: `1px solid ${repairStatus.status === 'completed' ? '#22c55e' : repairStatus.status === 'failed' ? '#ef4444' : '#6366f1'}`,
+          borderRadius: 8,
+          padding: 16,
+        }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {repairStatus.status === 'running' && <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />}
+            {repairStatus.status === 'completed' && <CheckCircle size={16} color="#22c55e" />}
+            {repairStatus.status === 'failed' && <XCircle size={16} color="#ef4444" />}
+            <span>
+              {repairStatus.status === 'running' ? 'LoRA Training In Progress...' :
+               repairStatus.status === 'completed' ? 'LoRA Repair Complete' :
+               'LoRA Repair Failed'}
+            </span>
+          </div>
+
+          {repairStatus.status === 'running' && repairStatus.progress && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 8 }}>
+              <div style={{ background: '#2a2a3e', borderRadius: 6, padding: '8px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#6366f1' }}>{repairStatus.progress.round || 0}</div>
+                <div style={{ fontSize: 11, color: '#888' }}>Round</div>
+              </div>
+              <div style={{ background: '#2a2a3e', borderRadius: 6, padding: '8px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#a5b4fc' }}>{repairStatus.progress.status || repairStatus.progress.stage || 'starting'}</div>
+                <div style={{ fontSize: 11, color: '#888' }}>Stage</div>
+              </div>
+              <div style={{ background: '#2a2a3e', borderRadius: 6, padding: '8px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#c4b5fd' }}>
+                  {repairStatus.progress.status === 'training' ? 'Training...' : 'Processing...'}
+                </div>
+                <div style={{ fontSize: 11, color: '#888' }}>Status</div>
+              </div>
+            </div>
+          )}
+
+          {repairStatus.status === 'completed' && repairStatus.result && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+              <div style={{ background: '#2a2a3e', borderRadius: 6, padding: '8px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: repairStatus.result.outcome === 'ACCEPTED' ? '#22c55e' : '#ef4444' }}>
+                  {repairStatus.result.outcome}
+                </div>
+                <div style={{ fontSize: 11, color: '#888' }}>Outcome</div>
+              </div>
+              <div style={{ background: '#2a2a3e', borderRadius: 6, padding: '8px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#22c55e' }}>{repairStatus.result.final_pass_rate}%</div>
+                <div style={{ fontSize: 11, color: '#888' }}>Final Pass Rate</div>
+              </div>
+              <div style={{ background: '#2a2a3e', borderRadius: 6, padding: '8px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#6366f1' }}>{repairStatus.result.rounds_completed}</div>
+                <div style={{ fontSize: 11, color: '#888' }}>Rounds</div>
+              </div>
+              <div style={{ background: '#2a2a3e', borderRadius: 6, padding: '8px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#a5b4fc' }}>{repairStatus.result.total_duration_seconds.toFixed(0)}s</div>
+                <div style={{ fontSize: 11, color: '#888' }}>Duration</div>
+              </div>
+            </div>
+          )}
+
+          {repairStatus.status === 'failed' && repairStatus.error && (
+            <div style={{ fontSize: 12, color: '#f87171', marginTop: 4 }}>{repairStatus.error}</div>
+          )}
+        </div>
+      )}
+
+      {repairError && !repairStatus && (
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 8, padding: 12, fontSize: 13, color: '#f87171' }}>
+          {repairError}
+        </div>
+      )}
+
       {/* ── Action Buttons ─────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        {sessionId && (
+          <button
+            onClick={() => {
+              const url = `http://localhost:8000/api/model/${sessionId}/report`;
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `ethos_report_${sessionId.slice(0, 8)}.pdf`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            }}
+            style={{ ...btnStyle('#6366f1'), display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Download size={14} /> Download Report
+          </button>
+        )}
+        {(verdictKey === 'REJECT' || verdictKey === 'REJECTED' || verdictKey === 'NEEDS_FIX') && onRepair && (
+          <button
+            onClick={onRepair}
+            disabled={repairLoading}
+            style={{
+              ...btnStyle('#f97316'),
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              opacity: repairLoading ? 0.6 : 1,
+              cursor: repairLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {repairLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Wrench size={14} />}
+            {repairLoading ? 'Training...' : 'Train & Fix Model'}
+          </button>
+        )}
         {verdictKey === 'NEEDS_FIX' && onPurify && (
-          <button onClick={onPurify} style={btnStyle('#f97316')}>Purify Model</button>
+          <button onClick={onPurify} style={btnStyle('#8b5cf6')}>Purify Model</button>
         )}
         {onApprove && (
           <button onClick={onApprove} style={btnStyle('#22c55e')}>Approve</button>
@@ -220,6 +335,8 @@ export const ModelTestResults: React.FC<ModelTestResultsProps> = ({ result, onPu
           <button onClick={onReject} style={btnStyle('#ef4444')}>Reject</button>
         )}
       </div>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
 
       {/* ── State Log ──────────────────────────────────────────── */}
       {result.state_log.length > 0 && (

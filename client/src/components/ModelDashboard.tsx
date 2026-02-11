@@ -194,6 +194,7 @@ export const ModelDashboard: React.FC<ModelDashboardProps> = ({ onSelectSession 
                     ) : selectedResult ? (
                       <ModelTestResults
                         result={selectedResult}
+                        sessionId={model.session_id}
                         onApprove={() => handleApprove(model.session_id)}
                         onReject={() => handleReject(model.session_id)}
                       />

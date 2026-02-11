@@ -6,8 +6,6 @@ import json
 import os
 import random
 from datasets import load_dataset
-import numpy as np
-from transformers import AutoTokenizer  # pyright: ignore[reportMissingImports]
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +14,6 @@ logger = logging.getLogger(__name__)
 class DatasetLoader:
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
-        self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
     def load_ethical_dataset(self, num_samples: Optional[int] = 40) -> List[Dict[str, Any]]:
         """Load and preprocess comprehensive ethical testing datasets from specified resources."""

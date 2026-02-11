@@ -1,14 +1,14 @@
 """
 Main API endpoints for ETHOS testing module.
 """
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from .datasets import DatasetLoader
 from .evaluator import EthicalEvaluator, LogicalEvaluator, TruthfulnessEvaluator
 from .analyzer import CodeAnalyzer
 from .models import AutomatedTestRequest, AutomatedTestResponse
-from .local_model import get_model, reset_model
+from .local_model import get_model
 from .reporting import (
     ensure_output_dir,
     build_io_log_entry,
@@ -25,12 +25,41 @@ logger = logging.getLogger(__name__)
 # Initialize router
 router = APIRouter(prefix="/ethos", tags=["ETHOS Testing"])
 
-# Initialize components
-dataset_loader = DatasetLoader("data")
-ethical_evaluator = EthicalEvaluator()
-logical_evaluator = LogicalEvaluator()
-truthfulness_evaluator = TruthfulnessEvaluator()
 code_analyzer = CodeAnalyzer()
+
+# Lazily initialized to avoid heavy model/tokenizer downloads on module import.
+_dataset_loader: Optional[DatasetLoader] = None
+_ethical_evaluator: Optional[EthicalEvaluator] = None
+_logical_evaluator: Optional[LogicalEvaluator] = None
+_truthfulness_evaluator: Optional[TruthfulnessEvaluator] = None
+
+
+def get_dataset_loader() -> DatasetLoader:
+    global _dataset_loader
+    if _dataset_loader is None:
+        _dataset_loader = DatasetLoader("data")
+    return _dataset_loader
+
+
+def get_ethical_evaluator() -> EthicalEvaluator:
+    global _ethical_evaluator
+    if _ethical_evaluator is None:
+        _ethical_evaluator = EthicalEvaluator()
+    return _ethical_evaluator
+
+
+def get_logical_evaluator() -> LogicalEvaluator:
+    global _logical_evaluator
+    if _logical_evaluator is None:
+        _logical_evaluator = LogicalEvaluator()
+    return _logical_evaluator
+
+
+def get_truthfulness_evaluator() -> TruthfulnessEvaluator:
+    global _truthfulness_evaluator
+    if _truthfulness_evaluator is None:
+        _truthfulness_evaluator = TruthfulnessEvaluator()
+    return _truthfulness_evaluator
 
 # Request/Response Models
 class TestRequest(BaseModel):
@@ -110,7 +139,7 @@ async def test_ethical(request: TestRequest):
     """
     try:
         # Load ethical dataset
-        dataset = dataset_loader.load_ethical_dataset(num_samples=request.max_samples)
+        dataset = get_dataset_loader().load_ethical_dataset(num_samples=request.max_samples)
 
         # Generate responses if not provided
         responses_input = request.responses or []
@@ -142,7 +171,7 @@ async def test_ethical(request: TestRequest):
         for i in range(num_to_evaluate):
             prompt = dataset[i]
             response = responses_input[i]
-            eval_result = ethical_evaluator.evaluate_response(prompt, response)
+            eval_result = get_ethical_evaluator().evaluate_response(prompt, response)
             results.append(EvaluationResult(
                 prompt_id=prompt["id"],
                 prompt=prompt["prompt"],
@@ -170,7 +199,7 @@ async def test_ethical_full_run(request: FullRunRequest):
     """
     try:
         # Load prompts
-        dataset = dataset_loader.load_ethical_dataset(num_samples=request.max_samples or 30)
+        dataset = get_dataset_loader().load_ethical_dataset(num_samples=request.max_samples or 30)
         
         # Generate responses if not provided
         responses_input = request.responses or []
@@ -207,7 +236,7 @@ async def test_ethical_full_run(request: FullRunRequest):
 
             io_logs.append(build_io_log_entry(prompt, model_resp))
 
-            eval_result = ethical_evaluator.evaluate_response(prompt, model_resp)
+            eval_result = get_ethical_evaluator().evaluate_response(prompt, model_resp)
             eval_results.append(EvaluationResult(
                 prompt_id=prompt["id"],
                 prompt=prompt["prompt"],
@@ -273,17 +302,18 @@ async def test_logical(request: TestRequest):
     """
     try:
         # Load logical dataset
-        dataset = dataset_loader.load_logical_dataset(num_samples=request.max_samples)
+        dataset = get_dataset_loader().load_logical_dataset(num_samples=request.max_samples)
+        responses_input = request.responses or []
 
         # Allow flexible number of responses - use min of available responses and dataset size
-        num_to_evaluate = min(len(request.responses), len(dataset))
+        num_to_evaluate = min(len(responses_input), len(dataset))
 
         # Evaluate each response
         results = []
         for i in range(num_to_evaluate):
             prompt = dataset[i]
-            response = request.responses[i]
-            eval_result = logical_evaluator.evaluate_response(prompt, response)
+            response = responses_input[i]
+            eval_result = get_logical_evaluator().evaluate_response(prompt, response)
             results.append(EvaluationResult(
                 prompt_id=prompt["id"],
                 prompt=prompt["prompt"],
@@ -305,7 +335,7 @@ async def test_logical(request: TestRequest):
 async def get_ethical_prompts(max_samples: Optional[int] = 20):
     """Get ethical testing prompts without answers."""
     try:
-        dataset = dataset_loader.load_ethical_dataset(num_samples=max_samples)
+        dataset = get_dataset_loader().load_ethical_dataset(num_samples=max_samples)
         return [{
             "id": item["id"],
             "category": item["category"],
@@ -327,7 +357,7 @@ async def test_truthfulness(request: TestRequest):
     """
     try:
         # Load truthfulness dataset
-        dataset = dataset_loader.load_truthfulness_dataset(num_samples=request.max_samples)
+        dataset = get_dataset_loader().load_truthfulness_dataset(num_samples=request.max_samples)
 
         # Generate responses if not provided
         responses_input = request.responses or []
@@ -354,7 +384,7 @@ async def test_truthfulness(request: TestRequest):
         for i in range(num_to_evaluate):
             prompt = dataset[i]
             response = responses_input[i]
-            eval_result = truthfulness_evaluator.evaluate_response(prompt, response)
+            eval_result = get_truthfulness_evaluator().evaluate_response(prompt, response)
             results.append(EvaluationResult(
                 prompt_id=prompt["id"],
                 prompt=prompt["prompt"],
@@ -391,7 +421,7 @@ async def test_truthfulness(request: TestRequest):
 async def get_logical_prompts(max_samples: Optional[int] = 20):
     """Get logical reasoning prompts without answers."""
     try:
-        dataset = dataset_loader.load_logical_dataset(num_samples=max_samples)
+        dataset = get_dataset_loader().load_logical_dataset(num_samples=max_samples)
         return [{
             "id": item["id"],
             "category": item["category"],
@@ -404,7 +434,7 @@ async def get_logical_prompts(max_samples: Optional[int] = 20):
 async def get_truthfulness_prompts(max_samples: Optional[int] = 20):
     """Get truthfulness testing prompts without answers."""
     try:
-        dataset = dataset_loader.load_truthfulness_dataset(num_samples=max_samples)
+        dataset = get_dataset_loader().load_truthfulness_dataset(num_samples=max_samples)
         return [{
             "id": item["id"],
             "category": item["category"],

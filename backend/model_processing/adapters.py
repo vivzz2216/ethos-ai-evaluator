@@ -18,8 +18,7 @@ class ModelAdapter(ABC):
     Ethics testing code only interacts with this API.
     """
 
-    @abstractmethod
-    def generate(self, prompt: str, max_tokens: int = 200) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
         """Generate text from a prompt."""
         ...
 
@@ -252,7 +251,7 @@ class TransformersAdapter(ModelAdapter):
             f"Install bitsandbytes for 4-bit quantization, or free up memory."
         )
 
-    def generate(self, prompt: str, max_tokens: int = 200) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
         self._load()
         try:
             import torch
@@ -320,7 +319,7 @@ class GGUFAdapter(ModelAdapter):
             logger.error(f"Failed to load GGUF model: {e}")
             raise
 
-    def generate(self, prompt: str, max_tokens: int = 200) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
         self._load()
         try:
             output = self._model.create_completion(
@@ -354,7 +353,7 @@ class PythonScriptAdapter(ModelAdapter):
         self.python_exe = python_exe
         self.cwd = cwd or os.path.dirname(script_path)
 
-    def generate(self, prompt: str, max_tokens: int = 200) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
         try:
             result = subprocess.run(
                 [self.python_exe, self.script_path],
@@ -392,7 +391,7 @@ class DockerAdapter(ModelAdapter):
     def __init__(self, container_id: str):
         self.container_id = container_id
 
-    def generate(self, prompt: str, max_tokens: int = 200) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
         try:
             safe_prompt = prompt.replace("'", "'\\''")
             result = subprocess.run(
@@ -434,7 +433,7 @@ class APIAdapter(ModelAdapter):
         if api_key:
             self.headers["Authorization"] = f"Bearer {api_key}"
 
-    def generate(self, prompt: str, max_tokens: int = 200) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
         try:
             import httpx
             with httpx.Client(timeout=30) as client:
@@ -469,6 +468,114 @@ class APIAdapter(ModelAdapter):
             return False
 
 
+class RemoteAdapter(ModelAdapter):
+    """Adapter that calls a remote inference server (e.g., RunPod GPU pod).
+    
+    Supports dynamic model loading: tells the remote server which model
+    to load via /load endpoint. One model at a time on the server.
+    """
+
+    def __init__(self, endpoint: str, model_name: str = "", timeout: int = 600):
+        self.endpoint = endpoint.rstrip("/")
+        self.model_name = model_name
+        self.timeout = timeout
+        self._model_loaded = False
+
+    def _ensure_model_loaded(self):
+        """Tell the remote server to load our model (skips if already loaded)."""
+        if self._model_loaded or not self.model_name:
+            return
+        try:
+            import httpx
+            logger.info(f"Requesting remote server to load: {self.model_name}")
+            with httpx.Client(timeout=300) as client:  # 5min for large downloads
+                resp = client.post(
+                    f"{self.endpoint}/load",
+                    json={"model_name": self.model_name},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                status = data.get("status", "")
+                if status in ("loaded", "already_loaded"):
+                    self._model_loaded = True
+                    logger.info(f"Remote model ready: {data.get('model', {})}")
+                else:
+                    logger.warning(f"Unexpected load response: {data}")
+        except Exception as e:
+            logger.error(f"Failed to load model on remote server: {e}")
+            raise
+
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
+        self._ensure_model_loaded()
+        try:
+            import httpx
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(
+                    f"{self.endpoint}/generate",
+                    json={
+                        "prompt": prompt,
+                        "max_tokens": max_tokens,
+                        "temperature": 0.7,
+                        "top_k": 50,
+                        "top_p": 0.9,
+                        "repetition_penalty": 1.2,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                text = data.get("text", "")
+                tokens = data.get('tokens_generated', 0)
+                time_sec = data.get('time_seconds', 0)
+                logger.info(
+                    f"Remote inference: {tokens} tokens in {time_sec}s"
+                )
+                if tokens == 0:
+                    logger.warning(f"No tokens generated! Response: {data}")
+                return text or "I understand the question but need more context."
+        except Exception as e:
+            logger.error(f"RemoteAdapter.generate error: {e}")
+            return f"Remote inference error: {e}"
+
+    def get_info(self) -> Dict[str, Any]:
+        info = {
+            "type": "remote",
+            "endpoint": self.endpoint,
+            "model_name": self.model_name,
+        }
+        try:
+            import httpx
+            with httpx.Client(timeout=10) as client:
+                resp = client.get(f"{self.endpoint}/health")
+                if resp.status_code == 200:
+                    info["remote_model"] = resp.json().get("model", {})
+        except Exception:
+            pass
+        return info
+
+    def health_check(self) -> bool:
+        try:
+            import httpx
+            # Just check if server is reachable - don't load model yet
+            with httpx.Client(timeout=15) as client:
+                resp = client.get(f"{self.endpoint}/health")
+                if resp.status_code != 200:
+                    logger.warning(f"Remote server unreachable: {resp.status_code}")
+                    return False
+                
+                data = resp.json()
+                # Accept both "ok" (RunPod) and "healthy" (Kaggle) status
+                status = data.get("status", "")
+                ok = status in ("ok", "healthy")
+                if ok:
+                    logger.info(f"Remote server healthy, model will load on first inference")
+                else:
+                    logger.warning(f"Remote server not ready: {data}")
+                return ok
+        except Exception as e:
+            logger.error(f"Remote health check failed: {e}")
+            return False
+
+
 class FallbackAdapter(ModelAdapter):
     """
     Fallback adapter that uses the existing LocalHuggingFaceModel.
@@ -485,7 +592,7 @@ class FallbackAdapter(ModelAdapter):
         from ethos_testing.local_model import get_model
         self._model = get_model(self.model_name)
 
-    def generate(self, prompt: str, max_tokens: int = 200) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512) -> str:
         self._load()
         return self._model.respond(prompt, max_new_tokens=max_tokens, temperature=0.7)
 
@@ -529,6 +636,27 @@ def create_adapter(
     Returns:
         A ModelAdapter instance.
     """
+    # Check for remote inference endpoint (cloud GPU)
+    remote_url = os.environ.get("REMOTE_MODEL_URL", "").strip()
+    if remote_url:
+        # Determine the HF model name to tell the remote server what to load
+        hf_name = model_name or ""
+        if not hf_name and model_type == "huggingface":
+            # Try to read _name_or_path from config.json
+            try:
+                import json
+                resolved = TransformersAdapter._resolve_model_dir(project_dir)
+                cfg_path = os.path.join(resolved, "config.json")
+                if os.path.isfile(cfg_path):
+                    with open(cfg_path, "r") as f:
+                        cfg = json.load(f)
+                    hf_name = cfg.get("_name_or_path", "")
+                    logger.info(f"Detected HF model name from config: {hf_name}")
+            except Exception as e:
+                logger.warning(f"Could not read config.json for model name: {e}")
+        logger.info(f"Using remote inference: {remote_url}, model={hf_name}")
+        return RemoteAdapter(remote_url, model_name=hf_name)
+
     if model_type == "huggingface":
         return TransformersAdapter(project_dir)
 

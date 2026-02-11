@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import {
   useModelClassification, useModelScan, useModelTesting,
-  useLocalLink, useSessionCreate,
+  useLocalLink, useSessionCreate, useModelRepair,
   type LinkResult,
 } from '../hooks/use-model-testing';
 import { ModelTestResults } from './ModelTestResults';
@@ -53,6 +53,7 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
   const { result: testResult, runTests, loading: testLoading, error: testError } = useModelTesting();
   const { linkLocal, loading: linkLoading, error: linkError } = useLocalLink();
   const { createSession, loading: sessionLoading } = useSessionCreate();
+  const { repairStatus, startRepair, stopPolling: stopRepairPolling, loading: repairLoading, error: repairError } = useModelRepair();
 
   const isLoading = scanLoading || classifyLoading || testLoading || linkLoading || sessionLoading;
   const error = globalError || scanError || classifyError || testError || linkError;
@@ -116,6 +117,23 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
       setStep('idle');
     }
   }, [ensureSession, scan, classify]);
+
+  // ── Direct HuggingFace model test (cloud GPU) ────────────────────
+  const handleHfDirect = useCallback(async () => {
+    if (!hfModelName.trim()) return;
+    setGlobalError(null);
+
+    const sessionId = await ensureSession();
+    if (!sessionId) return;
+
+    setStep('testing');
+    const res = await runTests(sessionId, maxPrompts, hfModelName.trim());
+    if (res) {
+      setStep('results');
+    } else {
+      setStep('idle');
+    }
+  }, [hfModelName, maxPrompts, ensureSession, runTests]);
 
   const handleRunTests = useCallback(async () => {
     if (!sid) return;
@@ -206,22 +224,61 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
               </p>
             </div>
 
-            {/* Primary: Link Local Path */}
+            {/* Primary: HuggingFace Model Name (Cloud GPU) */}
             <div style={{
               background: '#1e1e2e', borderRadius: 8, padding: 16, marginBottom: 12,
-              border: '1px solid #3a3a4e',
+              border: '1px solid #8b5cf644',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <FolderOpen size={16} color="#8b5cf6" />
-                <span style={{ fontWeight: 600, fontSize: 14 }}>Link Local Model</span>
+                <FlaskConical size={16} color="#8b5cf6" />
+                <span style={{ fontWeight: 600, fontSize: 14 }}>HuggingFace Model Name</span>
                 <span style={{
                   background: '#22c55e22', color: '#22c55e', padding: '1px 8px',
                   borderRadius: 10, fontSize: 10, fontWeight: 600,
                 }}>RECOMMENDED</span>
               </div>
               <p style={{ color: '#888', fontSize: 12, margin: '0 0 10px' }}>
-                Paste the full path to your model folder on disk. Files are copied directly
-                by the backend — no browser upload needed. Works for any size (17GB+).
+                Enter a HuggingFace model name. The model will be downloaded and loaded
+                on the cloud GPU automatically — no local files needed.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  value={hfModelName}
+                  onChange={e => setHfModelName(e.target.value)}
+                  placeholder="e.g. Orenguteng/Llama-3-8B-Lexi-Uncensored"
+                  onKeyDown={e => e.key === 'Enter' && handleHfDirect()}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <button
+                  onClick={handleHfDirect}
+                  disabled={isLoading || !hfModelName.trim()}
+                  style={{
+                    ...primaryBtnStyle,
+                    padding: '8px 16px', fontSize: 13,
+                    opacity: (!hfModelName.trim() || isLoading) ? 0.5 : 1,
+                  }}
+                >
+                  {isLoading ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
+                  Test Model
+                </button>
+              </div>
+              <p style={{ color: '#666', fontSize: 11, margin: '8px 0 0' }}>
+                Examples: <code style={{ color: '#8b5cf6' }}>Orenguteng/Llama-3-8B-Lexi-Uncensored</code>, <code style={{ color: '#8b5cf6' }}>meta-llama/Llama-2-7b-chat-hf</code>
+              </p>
+            </div>
+
+            {/* Secondary: Link Local Path */}
+            <div style={{
+              background: '#1e1e2e', borderRadius: 8, padding: 16, marginBottom: 12,
+              border: '1px solid #3a3a4e',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <FolderOpen size={16} color="#888" />
+                <span style={{ fontWeight: 600, fontSize: 14, color: '#aaa' }}>Link Local Model</span>
+              </div>
+              <p style={{ color: '#666', fontSize: 12, margin: '0 0 10px' }}>
+                Or paste a local model folder path. Files are scanned and classified locally.
               </p>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
@@ -236,7 +293,7 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
                   onClick={handleLinkLocal}
                   disabled={isLoading || !localPath.trim()}
                   style={{
-                    ...primaryBtnStyle,
+                    ...secondaryBtnStyle,
                     padding: '8px 16px', fontSize: 13,
                     opacity: (!localPath.trim() || isLoading) ? 0.5 : 1,
                   }}
@@ -245,12 +302,9 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
                   Link & Scan
                 </button>
               </div>
-              <p style={{ color: '#666', fontSize: 11, margin: '8px 0 0' }}>
-                Example: <code style={{ color: '#8b5cf6' }}>C:\Models\Llama-3-8B</code> or <code style={{ color: '#8b5cf6' }}>/home/user/models/gpt-neox</code>
-              </p>
             </div>
 
-            {/* Secondary: Scan already-uploaded files */}
+            {/* Tertiary: Scan already-uploaded files */}
             {sid && (
               <div style={{
                 background: '#1e1e2e', borderRadius: 8, padding: 14,
@@ -445,7 +499,14 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
         {/* Step: Results */}
         {step === 'results' && testResult && (
           <div>
-            <ModelTestResults result={testResult} />
+            <ModelTestResults
+              result={testResult}
+              sessionId={sid ?? undefined}
+              onRepair={() => { if (sid) startRepair(sid); }}
+              repairStatus={repairStatus}
+              repairLoading={repairLoading}
+              repairError={repairError}
+            />
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button onClick={handleReset} style={secondaryBtnStyle}>
                 <RotateCcw size={14} /> Test Again

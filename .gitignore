@@ -64,3 +64,14 @@ data/truthfulness_dataset.json
 backend.log
 frontend.log
 
+# Test outputs and audit artifacts
+quick_results.txt
+test_output.txt
+test_results.txt
+audit_script.py
+AUDIT_REPORT.md
+cleanup_safe.ps1
+analyze_models.ps1
+cleanup_models_DANGEROUS.ps1
+audit_report.json
+

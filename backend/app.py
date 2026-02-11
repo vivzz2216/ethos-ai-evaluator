@@ -1,6 +1,14 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form  # pyright: ignore[reportMissingImports]  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # pyright: ignore[reportMissingImports]  # type: ignore
-from fastapi.responses import JSONResponse  # pyright: ignore[reportMissingImports]  # type: ignore
+from fastapi.responses import JSONResponse, StreamingResponse  # pyright: ignore[reportMissingImports]  # type: ignore
+
+# Load .env file so REMOTE_MODEL_URL and other config is available
+try:
+    from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]  # type: ignore
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, rely on system env vars
+
 # Include ETHOS testing router
 try:
     import sys
@@ -10,6 +18,7 @@ try:
 except Exception as e:
     print(f"Failed to import ETHOS router: {e}")
     ethos_router = None
+import io
 import tempfile
 import os
 import shutil
@@ -1218,6 +1227,8 @@ async def test_model(session_id: str, max_prompts: int = 25, hf_model_name: Opti
     model_processing_results[session_id] = result
     active_sessions[session_id]['processing_state'] = sm.get_state()
     active_sessions[session_id]['processing_result'] = result
+    if hf_model_name:
+        active_sessions[session_id]['hf_model_name'] = hf_model_name
 
     return result
 
@@ -1230,6 +1241,27 @@ async def get_test_results(session_id: str):
     if not result:
         raise HTTPException(status_code=404, detail="No test results available")
     return result
+
+@app.get("/api/model/{session_id}/report")
+async def download_report(session_id: str):
+    """Download a PDF ethics report for a session."""
+    if session_id not in active_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    result = model_processing_results.get(session_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="No test results available. Run tests first.")
+
+    from model_processing.report_generator import generate_report_pdf
+    try:
+        pdf_bytes = generate_report_pdf(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="ethos_report_{session_id[:8]}.pdf"'},
+    )
 
 @app.get("/api/model/{session_id}/status")
 async def get_model_status(session_id: str):
@@ -1295,6 +1327,125 @@ async def reject_model(session_id: str, reason: str = "Manual rejection"):
     active_sessions[session_id]['processing_state'] = 'REJECTED'
     active_sessions[session_id]['rejection_reason'] = reason
     return {"message": "Model manually rejected", "session_id": session_id, "reason": reason}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LoRA REPAIR ENDPOINTS (Manual trigger from frontend)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Background repair jobs: { session_id: { status, progress, result, error, thread } }
+_repair_jobs: Dict[str, Dict] = {}
+
+
+@app.post("/api/model/{session_id}/repair")
+async def start_repair(session_id: str):
+    """Start LoRA repair training for a rejected/needs-fix model. Runs in background."""
+    if session_id not in active_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    result = model_processing_results.get(session_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="No test results. Run tests first.")
+
+    verdict = result.get("context", {}).get("verdict", {}).get("verdict")
+    if verdict not in ("REJECT", "NEEDS_FIX"):
+        raise HTTPException(status_code=400, detail=f"Model verdict is '{verdict}', repair only for REJECT/NEEDS_FIX")
+
+    if session_id in _repair_jobs and _repair_jobs[session_id].get("status") == "running":
+        return {"status": "already_running", "progress": _repair_jobs[session_id].get("progress", {})}
+
+    remote_url = os.environ.get("REMOTE_MODEL_URL", "").strip()
+    if not remote_url:
+        raise HTTPException(status_code=400, detail="REMOTE_MODEL_URL not set in backend .env")
+
+    hf_model = active_sessions[session_id].get("hf_model_name", "")
+    if not hf_model:
+        # Try to get from test result context
+        hf_model = result.get("context", {}).get("hf_model_name", "")
+    if not hf_model:
+        raise HTTPException(status_code=400, detail="HuggingFace model name not found for this session")
+
+    _repair_jobs[session_id] = {
+        "status": "running",
+        "progress": {"stage": "starting", "round": 0},
+        "result": None,
+        "error": None,
+    }
+
+    def _run_repair():
+        try:
+            from model_processing.purification_controller import PurificationController
+
+            def on_progress(data):
+                _repair_jobs[session_id]["progress"] = data
+
+            controller = PurificationController(
+                endpoint=remote_url,
+                model_name=hf_model,
+                on_progress=on_progress,
+            )
+
+            # Build adapter for re-testing
+            from model_processing.adapters import RemoteAdapter
+            adapter = RemoteAdapter(remote_url)
+
+            repair_result = controller.run(adapter=adapter)
+
+            _repair_jobs[session_id]["status"] = "completed"
+            _repair_jobs[session_id]["result"] = repair_result
+
+            # Update session state based on outcome
+            if repair_result.get("outcome") == "ACCEPTED":
+                active_sessions[session_id]["processing_state"] = "APPROVED"
+                if session_id in model_processing_results:
+                    model_processing_results[session_id]["state"] = "APPROVED"
+                    model_processing_results[session_id]["context"]["purification_result"] = {
+                        "passed": True,
+                        "outcome": "ACCEPTED",
+                        "fix_rate": repair_result.get("final_pass_rate", 0),
+                        "total_retested": repair_result.get("round_history", [{}])[-1].get("total_tests", 0) if repair_result.get("round_history") else 0,
+                        "still_failing": repair_result.get("round_history", [{}])[-1].get("fail_count", 0) if repair_result.get("round_history") else 0,
+                        "fixed": repair_result.get("round_history", [{}])[-1].get("pass_count", 0) if repair_result.get("round_history") else 0,
+                        "rounds_completed": repair_result.get("rounds_completed", 0),
+                    }
+            else:
+                active_sessions[session_id]["processing_state"] = "REJECTED"
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _repair_jobs[session_id]["status"] = "failed"
+            _repair_jobs[session_id]["error"] = str(e)
+
+    t = threading.Thread(target=_run_repair, daemon=True)
+    t.start()
+    _repair_jobs[session_id]["thread"] = t
+
+    return {
+        "status": "started",
+        "message": "LoRA repair training started",
+        "session_id": session_id,
+        "model": hf_model,
+        "endpoint": remote_url,
+    }
+
+
+@app.get("/api/model/{session_id}/repair-status")
+async def get_repair_status(session_id: str):
+    """Poll LoRA repair training progress."""
+    if session_id not in active_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    job = _repair_jobs.get(session_id)
+    if not job:
+        return {"status": "idle", "message": "No repair job started"}
+
+    return {
+        "status": job.get("status", "idle"),
+        "progress": job.get("progress", {}),
+        "result": job.get("result"),
+        "error": job.get("error"),
+    }
+
 
 @app.get("/api/models")
 async def list_all_models():
