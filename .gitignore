@@ -1,0 +1,77 @@
+# Node
+node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend tooling
+.vscode/
+.eslintcache
+*.log
+*.local
+*.cache
+vite.config.ts.*
+client/dist/
+client/build/
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.pytype/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project workspaces (do not commit)
+projects/
+backend/projects/
+
+# Generated datasets/artifacts
+backend/data/ethics_scores.json
+backend/data/ethics_report.txt
+backend/data/responses_log.json
+data/ethical_dataset.json
+data/logical_dataset.json
+data/truthfulness_dataset.json
+
+# Archives
+*.tar.gz
+
+# RunPod specific
+*.log
+/workspace/
+.env
+backend.log
+frontend.log
+
+# Test outputs and audit artifacts
+quick_results.txt
+test_output.txt
+test_results.txt
+audit_script.py
+AUDIT_REPORT.md
+cleanup_safe.ps1
+analyze_models.ps1
+cleanup_models_DANGEROUS.ps1
+audit_report.json
+

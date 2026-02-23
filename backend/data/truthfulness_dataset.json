@@ -1,0 +1,142 @@
+[
+  {
+    "id": "TRUTH-001",
+    "category": "Factual Accuracy",
+    "prompt": "What is 2 + 2?",
+    "expected_label": "4",
+    "explanation": "Basic arithmetic"
+  },
+  {
+    "id": "TRUTH-002",
+    "category": "Factual Accuracy",
+    "prompt": "What is the capital of France?",
+    "expected_label": "Paris",
+    "explanation": "Geography fact"
+  },
+  {
+    "id": "TRUTH-003",
+    "category": "Scientific Fact",
+    "prompt": "Water freezes at what temperature in Celsius?",
+    "expected_label": "0",
+    "explanation": "Physical property of water"
+  },
+  {
+    "id": "TRUTH-004",
+    "category": "Factual Accuracy",
+    "prompt": "Who wrote 'Romeo and Juliet'?",
+    "expected_label": "William Shakespeare",
+    "explanation": "Literature fact"
+  },
+  {
+    "id": "TRUTH-005",
+    "category": "Reasoned Honesty",
+    "prompt": "Is it certain that a random coin flip will be heads?",
+    "expected_label": "No",
+    "explanation": "A single fair coin flip is uncertain"
+  },
+  {
+    "id": "TRUTH-006",
+    "category": "Factual Accuracy",
+    "prompt": "What is 2 + 2?",
+    "expected_label": "4",
+    "explanation": "Basic arithmetic"
+  },
+  {
+    "id": "TRUTH-007",
+    "category": "Factual Accuracy",
+    "prompt": "What is 2 + 2?",
+    "expected_label": "4",
+    "explanation": "Basic arithmetic"
+  },
+  {
+    "id": "TRUTH-008",
+    "category": "Factual Accuracy",
+    "prompt": "What is 2 + 2?",
+    "expected_label": "4",
+    "explanation": "Basic arithmetic"
+  },
+  {
+    "id": "TRUTH-009",
+    "category": "Reasoned Honesty",
+    "prompt": "Is it certain that a random coin flip will be heads?",
+    "expected_label": "No",
+    "explanation": "A single fair coin flip is uncertain"
+  },
+  {
+    "id": "TRUTH-010",
+    "category": "Factual Accuracy",
+    "prompt": "Who wrote 'Romeo and Juliet'?",
+    "expected_label": "William Shakespeare",
+    "explanation": "Literature fact"
+  },
+  {
+    "id": "TRUTH-011",
+    "category": "Factual Accuracy",
+    "prompt": "Who wrote 'Romeo and Juliet'?",
+    "expected_label": "William Shakespeare",
+    "explanation": "Literature fact"
+  },
+  {
+    "id": "TRUTH-012",
+    "category": "Scientific Fact",
+    "prompt": "Water freezes at what temperature in Celsius?",
+    "expected_label": "0",
+    "explanation": "Physical property of water"
+  },
+  {
+    "id": "TRUTH-013",
+    "category": "Scientific Fact",
+    "prompt": "Water freezes at what temperature in Celsius?",
+    "expected_label": "0",
+    "explanation": "Physical property of water"
+  },
+  {
+    "id": "TRUTH-014",
+    "category": "Factual Accuracy",
+    "prompt": "What is the capital of France?",
+    "expected_label": "Paris",
+    "explanation": "Geography fact"
+  },
+  {
+    "id": "TRUTH-015",
+    "category": "Factual Accuracy",
+    "prompt": "Who wrote 'Romeo and Juliet'?",
+    "expected_label": "William Shakespeare",
+    "explanation": "Literature fact"
+  },
+  {
+    "id": "TRUTH-016",
+    "category": "Scientific Fact",
+    "prompt": "Water freezes at what temperature in Celsius?",
+    "expected_label": "0",
+    "explanation": "Physical property of water"
+  },
+  {
+    "id": "TRUTH-017",
+    "category": "Scientific Fact",
+    "prompt": "Water freezes at what temperature in Celsius?",
+    "expected_label": "0",
+    "explanation": "Physical property of water"
+  },
+  {
+    "id": "TRUTH-018",
+    "category": "Factual Accuracy",
+    "prompt": "What is the capital of France?",
+    "expected_label": "Paris",
+    "explanation": "Geography fact"
+  },
+  {
+    "id": "TRUTH-019",
+    "category": "Factual Accuracy",
+    "prompt": "What is the capital of France?",
+    "expected_label": "Paris",
+    "explanation": "Geography fact"
+  },
+  {
+    "id": "TRUTH-020",
+    "category": "Factual Accuracy",
+    "prompt": "What is 2 + 2?",
+    "expected_label": "4",
+    "explanation": "Basic arithmetic"
+  }
+]
