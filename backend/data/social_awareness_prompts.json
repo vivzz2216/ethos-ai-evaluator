@@ -1,0 +1,152 @@
+[
+    {
+        "id": "sw_001",
+        "category": "explanation",
+        "prompt": "Write a response explaining what artificial intelligence is.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_002",
+        "category": "explanation",
+        "prompt": "Write an explanation of artificial intelligence as if you were chatting casually with a close friend.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_003",
+        "category": "workplace",
+        "prompt": "Write a response to a colleague asking for help fixing a coding bug.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_004",
+        "category": "workplace",
+        "prompt": "Write a response to a colleague asking for help fixing a coding bug, but in a very casual, friendly tone.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_005",
+        "category": "explanation",
+        "prompt": "Explain what machine learning is in a professional workplace tone.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_006",
+        "category": "explanation",
+        "prompt": "Explain machine learning using casual everyday language.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_007",
+        "category": "customer_support",
+        "prompt": "Write a response to a customer whose order arrived late.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_008",
+        "category": "customer_support",
+        "prompt": "Write a response to a customer whose order arrived late, but in a relaxed conversational tone.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_009",
+        "category": "instruction",
+        "prompt": "Explain how to reset a password for a company account.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_010",
+        "category": "instruction",
+        "prompt": "Explain how to reset a password as if helping a friend over chat.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_011",
+        "category": "instruction",
+        "prompt": "Write instructions for installing Python on a computer.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_012",
+        "category": "instruction",
+        "prompt": "Write instructions for installing Python on a computer in a casual step-by-step conversational tone.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_013",
+        "category": "workplace",
+        "prompt": "Explain the importance of meeting deadlines in a company.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_014",
+        "category": "workplace",
+        "prompt": "Explain the importance of meeting deadlines as if talking to a friend who keeps procrastinating.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_015",
+        "category": "announcement",
+        "prompt": "Write a short message informing a team that a meeting is scheduled for tomorrow.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_016",
+        "category": "announcement",
+        "prompt": "Write a short message informing a team that a meeting is scheduled for tomorrow in a casual chat style.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_017",
+        "category": "explanation",
+        "prompt": "Explain the difference between HTTP and HTTPS.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_018",
+        "category": "explanation",
+        "prompt": "Explain the difference between HTTP and HTTPS in a friendly conversational way.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_019",
+        "category": "advice",
+        "prompt": "Write advice for someone preparing for a technical interview.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_020",
+        "category": "advice",
+        "prompt": "Write advice for someone preparing for a technical interview using informal conversational language.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_021",
+        "category": "personal",
+        "prompt": "Respond to a friend who says they failed an exam.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_022",
+        "category": "personal",
+        "prompt": "Respond to someone who says they failed an exam in a strictly professional tone.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_023",
+        "category": "explanation",
+        "prompt": "Explain how blockchain works in a formal educational tone.",
+        "expected_style": "formal"
+    },
+    {
+        "id": "sw_024",
+        "category": "explanation",
+        "prompt": "Explain how blockchain works as if casually describing it to a friend.",
+        "expected_style": "informal"
+    },
+    {
+        "id": "sw_025",
+        "category": "explanation",
+        "prompt": "Write a response that combines both professional clarity and friendly conversational language when explaining a technical topic.",
+        "expected_style": "mixed"
+    }
+]

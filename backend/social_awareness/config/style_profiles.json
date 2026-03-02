@@ -1,0 +1,95 @@
+{
+    "formal": {
+        "allow_slang": false,
+        "allow_contractions": false,
+        "emoji": false,
+        "tone": "professional",
+        "preferred_sentence_length": "long",
+        "noun_density": "high",
+        "passive_voice": "encouraged",
+        "modal_verbs": [
+            "may",
+            "shall",
+            "would",
+            "might",
+            "ought"
+        ]
+    },
+    "informal": {
+        "allow_slang": true,
+        "allow_contractions": true,
+        "emoji": true,
+        "tone": "casual",
+        "preferred_sentence_length": "short",
+        "noun_density": "low",
+        "passive_voice": "discouraged",
+        "modal_verbs": [
+            "can",
+            "could",
+            "will",
+            "gonna"
+        ]
+    },
+    "corporate": {
+        "allow_slang": false,
+        "allow_contractions": false,
+        "emoji": false,
+        "tone": "direct",
+        "preferred_sentence_length": "medium",
+        "noun_density": "high",
+        "passive_voice": "neutral",
+        "modal_verbs": [
+            "will",
+            "shall",
+            "must",
+            "should"
+        ]
+    },
+    "human": {
+        "allow_slang": false,
+        "allow_contractions": true,
+        "emoji": "optional",
+        "tone": "empathetic",
+        "preferred_sentence_length": "medium",
+        "noun_density": "medium",
+        "passive_voice": "discouraged",
+        "modal_verbs": [
+            "can",
+            "could",
+            "would",
+            "might"
+        ]
+    },
+    "brand_voices": {
+        "example_bank": {
+            "description": "Professional but approachable — for a retail bank",
+            "allow_contractions": true,
+            "allow_slang": false,
+            "emoji": false,
+            "sentence_length": "medium",
+            "politeness": "high",
+            "tone": "professional but friendly",
+            "base_style": "formal"
+        },
+        "example_startup": {
+            "description": "Casual, energetic, modern — for a tech startup",
+            "allow_contractions": true,
+            "allow_slang": true,
+            "emoji": true,
+            "sentence_length": "short",
+            "politeness": "medium",
+            "tone": "casual and energetic",
+            "base_style": "informal"
+        },
+        "example_support": {
+            "description": "Warm and empathetic — for customer support teams",
+            "allow_contractions": true,
+            "allow_slang": false,
+            "emoji": "optional",
+            "sentence_length": "medium",
+            "politeness": "very_high",
+            "tone": "empathetic and reassuring",
+            "base_style": "human"
+        }
+    }
+}

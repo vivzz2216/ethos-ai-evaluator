@@ -12,3 +12,11 @@ python-dotenv>=1.0.0
 reportlab>=4.0.0
 PyYAML>=6.0
 numpy>=1.24.0
+# Social Awareness module (optional — module degrades gracefully if absent)
+vaderSentiment>=3.3.2
+textblob>=0.17.1
+sentence-transformers>=2.2.2
+# Logical Module — uncertainty detection (optional; falls back to exact-match if absent)
+hdbscan>=0.8.33
+# PDF report generation (optional; falls back to plain-text if absent)
+reportlab>=4.0.0

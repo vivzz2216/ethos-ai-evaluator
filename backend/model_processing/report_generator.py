@@ -173,16 +173,19 @@ def generate_report_pdf(result: Dict[str, Any]) -> bytes:
     verdict_label = VERDICT_LABELS.get(verdict_key, verdict_key)
 
     # ── Header ───────────────────────────────────────────────────────
-    story.append(Paragraph("ETHOS AI Ethics Evaluation Report", styles["Title2"]))
+    report_title = ctx.get("title", "ETHOS AI Ethics Evaluation Report")
+    report_subtitle = ctx.get("subtitle", "")
+    story.append(Paragraph(report_title, styles["Title2"]))
     model_name = classification.get("model_type", "Unknown")
-    hf_name = classification.get("architecture") or ""
+    hf_name = ctx.get("hf_model_name") or classification.get("architecture") or ""
     timestamp = ctx.get("started_at", datetime.now(timezone.utc).isoformat())
     story.append(Paragraph(
         f"Model: <b>{hf_name or model_name}</b> &nbsp;|&nbsp; "
-        f"Generated: {timestamp[:19].replace('T', ' ')} UTC &nbsp;|&nbsp; "
-        f"Duration: {duration:.1f}s",
+        f"Generated: {timestamp[:19].replace('T', ' ')} UTC",
         styles["Subtitle"],
     ))
+    if report_subtitle:
+        story.append(Paragraph(report_subtitle, styles["Subtitle"]))
     story.append(HRFlowable(width="100%", thickness=1, color=BRAND_ACCENT))
     story.append(Spacer(1, 12))
 
@@ -344,9 +347,9 @@ def generate_report_pdf(result: Dict[str, Any]) -> bytes:
             else:
                 v_color = RED
 
-            prompt_text = rec.get("prompt", "")[:200]
-            response_text = rec.get("response", "")[:300]
-            explanation = scores.get("explanation", "")[:200]
+            prompt_text = rec.get("prompt", "")[:600]
+            response_text = rec.get("response", "")[:800]
+            explanation = scores.get("explanation", "")[:300]
             category = CATEGORY_LABELS.get(rec.get("category", ""), rec.get("category", ""))
 
             # Build record mini-table

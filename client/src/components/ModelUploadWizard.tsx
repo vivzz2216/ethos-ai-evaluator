@@ -8,7 +8,7 @@ import React, { useState, useCallback } from 'react';
 import {
   Upload, Search, FlaskConical, Shield, CheckCircle, XCircle,
   AlertTriangle, Loader2, ChevronRight, ArrowLeft, Play, RotateCcw,
-  FolderOpen, Link, HardDrive,
+  FolderOpen, Link, HardDrive, MessageSquare, Download, BarChart2, Atom,
 } from 'lucide-react';
 import {
   useModelClassification, useModelScan, useModelTesting,
@@ -16,6 +16,7 @@ import {
   type LinkResult,
 } from '../hooks/use-model-testing';
 import { ModelTestResults } from './ModelTestResults';
+import { LogicalModuleWizard } from './LogicalModuleWizard';
 
 interface ModelUploadWizardProps {
   sessionId: string | null;
@@ -44,6 +45,19 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(propSessionId);
   const [linkInfo, setLinkInfo] = useState<LinkResult | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
+
+  // Social Awareness state
+  const [showTestPicker, setShowTestPicker] = useState(false);
+  const [saLoading, setSaLoading] = useState(false);
+  const [saError, setSaError] = useState<string | null>(null);
+  const [saSessionId, setSaSessionId] = useState<string | null>(null);
+  const [saInitialResult, setSaInitialResult] = useState<any | null>(null);
+  const [saFinalResult, setSaFinalResult] = useState<any | null>(null);
+  const [saTargetStyle, setSaTargetStyle] = useState<'formal' | 'informal' | 'mixed'>('formal');
+  const [saStep, setSaStep] = useState<'idle' | 'testing' | 'initial_done' | 'transforming' | 'final_done'>('idle');
+
+  // Logical Module state
+  const [lmActive, setLmActive] = useState(false);
 
   // Keep in sync with parent
   const sid = currentSessionId || propSessionId;
@@ -150,7 +164,76 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
     setStep('idle');
     setGlobalError(null);
     setLinkInfo(null);
+    setShowTestPicker(false);
+    setSaStep('idle');
+    setSaInitialResult(null);
+    setSaFinalResult(null);
+    setSaError(null);
+    setSaSessionId(null);
+    setLmActive(false);
   }, []);
+
+  // ── Social Awareness Test flow ──────────────────────────────────────
+  const BASE = 'http://localhost:8000';
+
+  const handleSaTest = useCallback(async () => {
+    if (!hfModelName.trim()) return;
+    setShowTestPicker(false);
+    setSaStep('testing');
+    setSaError(null);
+    setSaInitialResult(null);
+    setSaFinalResult(null);
+    const sessionId = await ensureSession();
+    if (!sessionId) { setSaStep('idle'); return; }
+    try {
+      const res = await fetch(`${BASE}/social/test-model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_name: hfModelName.trim(), session_id: sessionId }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setSaInitialResult(data);
+      setSaSessionId(data.session_id);
+      setSaStep('initial_done');
+    } catch (e: any) {
+      setSaError(e.message || 'Social Awareness test failed');
+      setSaStep('idle');
+    }
+  }, [hfModelName, ensureSession]);
+
+  const handleSaTransform = useCallback(async () => {
+    if (!saSessionId) return;
+    setSaStep('transforming');
+    setSaError(null);
+    try {
+      const res = await fetch(`${BASE}/social/transform-model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model_name: hfModelName.trim(),
+          target_style: saTargetStyle,
+          session_id: saSessionId,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setSaFinalResult(data);
+      setSaStep('final_done');
+    } catch (e: any) {
+      setSaError(e.message || 'Transformation failed');
+      setSaStep('initial_done');
+    }
+  }, [saSessionId, saTargetStyle, hfModelName]);
+
+  const downloadPdf = (url: string, filename: string) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
@@ -251,7 +334,10 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
               />
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
-                  onClick={handleHfDirect}
+                  onClick={() => {
+                    if (!hfModelName.trim()) return;
+                    setShowTestPicker(true);
+                  }}
                   disabled={isLoading || !hfModelName.trim()}
                   style={{
                     ...primaryBtnStyle,
@@ -268,13 +354,13 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
                     if (!hfModelName.trim()) return;
                     (async () => {
                       setGlobalError(null);
+                      setShowTestPicker(false);
                       const sessionId = await ensureSession();
                       if (!sessionId) return;
                       setStep('testing');
                       const res = await runTests(sessionId, maxPrompts, hfModelName.trim());
                       if (res) {
                         setStep('results');
-                        // Auto-start repair after test completes
                         startRepair(sessionId);
                       } else {
                         setStep('idle');
@@ -294,6 +380,56 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
                   Train & Fix Model
                 </button>
               </div>
+
+              {/* ── Test Type Picker ── */}
+              {showTestPicker && (
+                <div style={{
+                  marginTop: 12, background: '#12121f', borderRadius: 8,
+                  border: '1px solid #6366f144', padding: 14,
+                }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Choose Test Type</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={handleHfDirect}
+                      style={{
+                        flex: 1, ...primaryBtnStyle, justifyContent: 'center',
+                        fontSize: 12, padding: '10px 12px',
+                      }}
+                    >
+                      <Shield size={14} /> Ethics Test
+                      <span style={{ fontSize: 10, color: '#c4b5fd', marginLeft: 4 }}>25 ethical prompts</span>
+                    </button>
+                    <button
+                      onClick={handleSaTest}
+                      style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        background: '#22c55e', color: '#fff', border: 'none',
+                        borderRadius: 8, padding: '10px 12px', fontSize: 12,
+                        fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      <MessageSquare size={14} /> Social Awareness
+                      <span style={{ fontSize: 10, color: '#bbf7d0', marginLeft: 4 }}>25 style prompts</span>
+                    </button>
+                    <button
+                      onClick={() => { setShowTestPicker(false); setLmActive(true); }}
+                      style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        background: '#6366f1', color: '#fff', border: 'none',
+                        borderRadius: 8, padding: '10px 12px', fontSize: 12,
+                        fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      <Atom size={14} /> Logical Module
+                      <span style={{ fontSize: 10, color: '#c7d2fe', marginLeft: 4 }}>15 logic prompts</span>
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setShowTestPicker(false)}
+                    style={{ ...secondaryBtnStyle, marginTop: 8, width: '100%', justifyContent: 'center', fontSize: 12 }}
+                  >Cancel</button>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#666' }}>
                 <div style={{ flex: 1 }}>
                   <strong style={{ color: '#8b5cf6' }}>Test Model:</strong> Runs 25 ethical prompts → shows score + PDF → you decide to train
@@ -551,6 +687,185 @@ export const ModelUploadWizard: React.FC<ModelUploadWizardProps> = ({ sessionId:
                 <RotateCcw size={14} /> Test Again
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── Social Awareness Test Steps ─────────────────────────── */}
+        {saStep === 'testing' && saLoading !== false && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <Loader2 size={40} color="#22c55e" style={{ animation: 'spin 1s linear infinite', marginBottom: 16 }} />
+            <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>Running Social Awareness Tests...</h3>
+            <p style={{ color: '#888', fontSize: 13 }}>Sending 25 communication-style prompts to the model...</p>
+          </div>
+        )}
+
+        {(saStep === 'testing') && !saLoading && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <Loader2 size={40} color="#22c55e" style={{ animation: 'spin 1s linear infinite', marginBottom: 16 }} />
+            <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>Running Social Awareness Test...</h3>
+            <p style={{ color: '#888', fontSize: 13 }}>Sending 25 style prompts to the model. This may take a few minutes.</p>
+          </div>
+        )}
+
+        {saError && (
+          <div style={{
+            background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444',
+            borderRadius: 8, padding: '10px 14px', marginBottom: 12,
+            fontSize: 13, color: '#f87171',
+          }}>
+            <AlertTriangle size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            {saError}
+          </div>
+        )}
+
+        {(saStep === 'initial_done' || saStep === 'final_done') && saInitialResult && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* ── Initial Results Card ── */}
+            <div style={{ background: '#1e1e2e', borderRadius: 10, padding: 16, border: '1px solid #22c55e44' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <MessageSquare size={16} color="#22c55e" />
+                <span style={{ fontWeight: 700, fontSize: 15 }}>Initial Style Report</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 11, color: '#888' }}>{saInitialResult.prompts_tested} prompts tested</span>
+              </div>
+
+              {/* Style Distribution */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Style Distribution</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {Object.entries(saInitialResult.summary?.style_distribution || {}).map(([label, pct]: any) => (
+                    <div key={label} style={{
+                      flex: 1, background: '#2a2a3e', borderRadius: 8, padding: '10px 12px', textAlign: 'center',
+                      borderTop: `3px solid ${label === 'FORMAL' ? '#6366f1' : label === 'INFORMAL' ? '#f59e0b' : '#a855f7'}`,
+                    }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: label === 'FORMAL' ? '#6366f1' : label === 'INFORMAL' ? '#f59e0b' : '#a855f7' }}>{pct}%</div>
+                      <div style={{ fontSize: 11, color: '#888' }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Download Initial PDF */}
+              <button
+                onClick={() => downloadPdf(`${BASE}/social/report/initial/${saInitialResult.session_id}`, `social_initial_${saInitialResult.session_id?.slice(0, 8)}.pdf`)}
+                style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Download size={14} /> Download Initial Report PDF
+              </button>
+            </div>
+
+            {/* ── Transform Section ── */}
+            {saStep === 'initial_done' && (
+              <div style={{ background: '#1e1e2e', borderRadius: 10, padding: 16, border: '1px solid #a855f744' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Transform Model Responses</div>
+                <p style={{ color: '#888', fontSize: 12, margin: '0 0 12px' }}>
+                  Choose a target style. The module will rewrite each of the 25 model responses, re-evaluate,
+                  and generate a before-vs-after comparison PDF.
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  {(['formal', 'informal', 'mixed'] as const).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setSaTargetStyle(s)}
+                      style={{
+                        flex: 1, border: `2px solid ${saTargetStyle === s ? (s === 'formal' ? '#6366f1' : s === 'informal' ? '#f59e0b' : '#a855f7') : '#2a2a3e'}`,
+                        borderRadius: 8, padding: '10px 12px', cursor: 'pointer',
+                        background: saTargetStyle === s ? '#2a2a3e' : 'transparent',
+                        color: saTargetStyle === s ? '#e0e0e0' : '#666',
+                        fontWeight: 600, fontSize: 13, textTransform: 'capitalize',
+                      }}
+                    >
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleSaTransform}
+                  style={{
+                    ...primaryBtnStyle, background: '#a855f7', width: '100%', justifyContent: 'center',
+                  }}
+                >
+                  <MessageSquare size={14} /> Transform to {saTargetStyle.charAt(0).toUpperCase() + saTargetStyle.slice(1)}
+                </button>
+              </div>
+            )}
+
+            {/* ── Final / Comparison Results ── */}
+            {saStep === 'final_done' && saFinalResult && (
+              <div style={{ background: '#1e1e2e', borderRadius: 10, padding: 16, border: '1px solid #6366f144' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <BarChart2 size={16} color="#6366f1" />
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>After Transformation</span>
+                  <span style={{ fontSize: 11, color: '#a855f7', marginLeft: 4 }}>→ {saFinalResult.target_style.toUpperCase()}</span>
+                </div>
+
+                {/* Before vs After */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>Before</div>
+                    {Object.entries(saFinalResult.summary_before?.style_distribution || {}).map(([label, pct]: any) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                        <span style={{ color: label === 'FORMAL' ? '#6366f1' : label === 'INFORMAL' ? '#f59e0b' : '#a855f7', fontWeight: 600 }}>{label}</span>
+                        <span>{pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>After</div>
+                    {Object.entries(saFinalResult.summary_after?.style_distribution || {}).map(([label, pct]: any) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                        <span style={{ color: label === 'FORMAL' ? '#6366f1' : label === 'INFORMAL' ? '#f59e0b' : '#a855f7', fontWeight: 600 }}>{label}</span>
+                        <span>{pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => downloadPdf(`${BASE}/social/report/initial/${saInitialResult.session_id}`, `social_initial_${saInitialResult.session_id?.slice(0, 8)}.pdf`)}
+                    style={{ ...secondaryBtnStyle, flex: 1, justifyContent: 'center' }}
+                  >
+                    <Download size={14} /> Initial PDF
+                  </button>
+                  <button
+                    onClick={() => downloadPdf(`${BASE}/social/report/final/${saInitialResult.session_id}`, `social_final_${saInitialResult.session_id?.slice(0, 8)}.pdf`)}
+                    style={{ ...primaryBtnStyle, flex: 1, justifyContent: 'center', background: '#6366f1' }}
+                  >
+                    <Download size={14} /> Final Comparison PDF
+                  </button>
+                </div>
+                <button onClick={handleReset} style={{ ...secondaryBtnStyle, marginTop: 10, width: '100%', justifyContent: 'center' }}>
+                  <RotateCcw size={14} /> Test Another Model
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Transform spinner — rendered outside the initial_done/final_done block */}
+        {saStep === 'transforming' && (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <Loader2 size={30} color="#a855f7" style={{ animation: 'spin 1s linear infinite', marginBottom: 10 }} />
+            <div style={{ fontSize: 14, color: '#ccc' }}>Transforming responses to <strong>{saTargetStyle}</strong> style...</div>
+          </div>
+        )}
+
+        {/* ── Logical Module Wizard ──────────────────────────────────── */}
+        {lmActive && (
+          <div style={{ marginTop: 4 }}>
+            <LogicalModuleWizard />
+            <button
+              onClick={() => setLmActive(false)}
+              style={{
+                marginTop: 10, display: 'flex', alignItems: 'center', gap: 6,
+                background: 'none', border: '1px solid #3a3a5e', borderRadius: 6,
+                color: '#888', cursor: 'pointer', fontSize: 12, padding: '6px 12px',
+              }}
+            >
+              <ArrowLeft size={12} /> Back to Model Selection
+            </button>
           </div>
         )}
       </div>

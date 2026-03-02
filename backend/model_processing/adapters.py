@@ -54,6 +54,9 @@ class TransformersAdapter(ModelAdapter):
         When linked via link-local, model files live in a subdirectory
         (e.g., project_dir/Llama-3-8B/config.json), not at project root.
         """
+        if not os.path.isdir(path):
+            return path
+            
         if os.path.isfile(os.path.join(path, "config.json")):
             return path
         # Search one level of subdirectories

@@ -21,6 +21,7 @@ import {
   Globe,
   Bot,
   FlaskConical,
+  Atom,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MonacoEditor from '@/components/MonacoEditor';
@@ -34,6 +35,7 @@ import AIAgentPanel from '@/components/AIAgentPanel';
 import { ModelUploadWizard } from '@/components/ModelUploadWizard';
 import { ModelDashboard } from '@/components/ModelDashboard';
 import { EthosTestResults } from '@/components/EthosTestResults';
+import { LogicalModulePanel } from '@/components/LogicalModulePanel';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useEthosTest } from '@/hooks/use-ethos-test';
@@ -135,6 +137,7 @@ const ACTIVITY_ITEMS: ActivityItem[] = [
   { id: 'source-control', icon: GitBranch, label: 'Source Control' },
   { id: 'models', icon: Brain, label: 'AI Models', shortcut: 'Ctrl+Shift+M' },
   { id: 'model-testing', icon: FlaskConical, label: 'Model Testing' },
+  { id: 'logical-module', icon: Atom, label: 'Logical Module (Confidence)' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -616,6 +619,9 @@ const Editor: React.FC = () => {
     } else if (id === 'model-testing') {
       if (activeActivity === 'model-testing' && rightSidebarOpen) setRightSidebarOpen(false);
       else { setActiveActivity('model-testing'); setRightSidebarOpen(true); setLeftSidebarOpen(false); }
+    } else if (id === 'logical-module') {
+      if (activeActivity === 'logical-module' && leftSidebarOpen) setLeftSidebarOpen(false);
+      else { setActiveActivity('logical-module'); setLeftSidebarOpen(true); setRightSidebarOpen(false); }
     } else {
       setActiveActivity(id);
       setLeftSidebarOpen(true);
@@ -670,10 +676,10 @@ const Editor: React.FC = () => {
 
       {/* ── Title Bar ─────────────────────────────────────────────── */}
       <div className="h-[30px] flex items-center justify-between px-3 flex-shrink-0 select-none"
-           style={{ background: '#323233', borderBottom: '1px solid #3e3e42' }}>
+        style={{ background: '#323233', borderBottom: '1px solid #3e3e42' }}>
         <div className="flex items-center gap-3">
           <button onClick={() => window.history.back()}
-                  className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
+            className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
             <ArrowLeft className="w-3 h-3" /> Back
           </button>
           <span className="text-[11px] text-[#999]">ETHOS AI Evaluator</span>
@@ -681,37 +687,37 @@ const Editor: React.FC = () => {
         <div className="flex items-center gap-1">
           {/* ETHOS Test buttons */}
           <button onClick={() => handleStartEthosTest('ethical')}
-                  className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
+            className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
             <Brain className="w-3 h-3" /> Ethical
           </button>
           <button onClick={() => handleStartEthosTest('logical')}
-                  className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
+            className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
             <AlertTriangle className="w-3 h-3" /> Logical
           </button>
           <button onClick={() => handleStartEthosTest('truthfulness')}
-                  className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
+            className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
             <CheckCircle className="w-3 h-3" /> Truth
           </button>
           <div className="w-px h-3 bg-[#555] mx-1" />
           <button onClick={saveCurrentFile}
-                  className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
+            className="text-[11px] text-[#cccccc] hover:text-white flex items-center gap-1 hover:bg-[#505050] px-2 py-0.5 rounded transition-colors">
             <Save className="w-3 h-3" /> Save
           </button>
           <div className="w-px h-3 bg-[#555] mx-1" />
           <button onClick={() => setLeftSidebarOpen(p => !p)}
-                  className="p-1 rounded hover:bg-[#505050] text-[#999] hover:text-white transition-colors" title="Toggle Explorer (Ctrl+B)">
+            className="p-1 rounded hover:bg-[#505050] text-[#999] hover:text-white transition-colors" title="Toggle Explorer (Ctrl+B)">
             <PanelLeft className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => setTerminalVisible(p => !p)}
-                  className="p-1 rounded hover:bg-[#505050] text-[#999] hover:text-white transition-colors" title="Toggle Terminal (Ctrl+`)">
+            className="p-1 rounded hover:bg-[#505050] text-[#999] hover:text-white transition-colors" title="Toggle Terminal (Ctrl+`)">
             <PanelBottom className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => { setActiveActivity('models'); setRightSidebarOpen(p => !p); setLeftSidebarOpen(false); }}
-                  className="p-1 rounded hover:bg-[#505050] text-[#999] hover:text-white transition-colors" title="Toggle Models (Ctrl+Shift+M)">
+            className="p-1 rounded hover:bg-[#505050] text-[#999] hover:text-white transition-colors" title="Toggle Models (Ctrl+Shift+M)">
             <Brain className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => { setActiveActivity('agent'); setRightSidebarOpen(p => !p); setLeftSidebarOpen(false); }}
-                  className="p-1 rounded hover:bg-[#505050] text-[#999] hover:text-white transition-colors" title="Toggle AI Agent (Ctrl+Shift+A)">
+            className="p-1 rounded hover:bg-[#505050] text-[#999] hover:text-white transition-colors" title="Toggle AI Agent (Ctrl+Shift+A)">
             <Bot className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -722,20 +728,19 @@ const Editor: React.FC = () => {
 
         {/* ── Activity Bar ──────────────────────────────────────────── */}
         <div className="w-[48px] flex-shrink-0 flex flex-col items-center py-1"
-             style={{ background: '#333333', borderRight: '1px solid #3e3e42' }}>
+          style={{ background: '#333333', borderRight: '1px solid #3e3e42' }}>
           {ACTIVITY_ITEMS.map(item => {
             const Icon = item.icon;
             const isRightPanel = item.id === 'models' || item.id === 'agent' || item.id === 'model-testing';
             const isActive = (item.id === 'explorer' && leftSidebarOpen && activeActivity === 'explorer') ||
-                             (isRightPanel && rightSidebarOpen && activeActivity === item.id) ||
-                             (activeActivity === item.id && leftSidebarOpen && !isRightPanel && item.id !== 'explorer');
+              (isRightPanel && rightSidebarOpen && activeActivity === item.id) ||
+              (activeActivity === item.id && leftSidebarOpen && !isRightPanel && item.id !== 'explorer');
             return (
               <button
                 key={item.id}
                 onClick={() => handleActivityClick(item.id)}
-                className={`w-[48px] h-[48px] flex items-center justify-center relative transition-colors ${
-                  isActive ? 'text-white' : 'text-[#858585] hover:text-white'
-                }`}
+                className={`w-[48px] h-[48px] flex items-center justify-center relative transition-colors ${isActive ? 'text-white' : 'text-[#858585] hover:text-white'
+                  }`}
                 title={`${item.label}${item.shortcut ? ` (${item.shortcut})` : ''}`}
               >
                 <Icon className="w-[22px] h-[22px]" />
@@ -750,7 +755,7 @@ const Editor: React.FC = () => {
         {/* ── Left Sidebar (File Explorer) ──────────────────────────── */}
         {leftSidebarOpen && activeActivity === 'explorer' && (
           <div className="flex-shrink-0 overflow-hidden transition-all duration-200"
-               style={{ width: 260, borderRight: '1px solid #3e3e42' }}>
+            style={{ width: 260, borderRight: '1px solid #3e3e42' }}>
             <IDEFileExplorer
               files={files}
               selectedFile={selectedFile}
@@ -766,8 +771,16 @@ const Editor: React.FC = () => {
         {/* ── Left Sidebar (Settings) ────────────────────────────────── */}
         {leftSidebarOpen && activeActivity === 'settings' && (
           <div className="flex-shrink-0 overflow-hidden transition-all duration-200"
-               style={{ width: 260, borderRight: '1px solid #3e3e42' }}>
+            style={{ width: 260, borderRight: '1px solid #3e3e42' }}>
             <IDESettings config={terminalConfig} onConfigChange={setTerminalConfig} />
+          </div>
+        )}
+
+        {/* ── Left Sidebar (Logical Module) ──────────────────────────── */}
+        {leftSidebarOpen && activeActivity === 'logical-module' && (
+          <div className="flex-shrink-0 overflow-hidden transition-all duration-200 bg-white dark:bg-gray-900"
+            style={{ width: 480, borderRight: '1px solid #3e3e42' }}>
+            <LogicalModulePanel />
           </div>
         )}
 
@@ -776,17 +789,16 @@ const Editor: React.FC = () => {
 
           {/* Tab Bar */}
           <div className="flex items-center h-[35px] flex-shrink-0 overflow-x-auto"
-               style={{ background: '#252526', borderBottom: '1px solid #3e3e42' }}>
+            style={{ background: '#252526', borderBottom: '1px solid #3e3e42' }}>
             {tabs.map(tab => {
               const isActive = tab.id === activeTabId;
               return (
                 <div
                   key={tab.id}
-                  className={`flex items-center gap-1.5 px-3 h-full text-[13px] cursor-pointer border-r group transition-colors ${
-                    isActive
+                  className={`flex items-center gap-1.5 px-3 h-full text-[13px] cursor-pointer border-r group transition-colors ${isActive
                       ? 'text-white'
                       : 'text-[#969696] hover:text-[#ccc]'
-                  }`}
+                    }`}
                   style={{
                     background: isActive ? '#1e1e1e' : '#2d2d2d',
                     borderColor: '#3e3e42',
@@ -859,7 +871,7 @@ const Editor: React.FC = () => {
         {/* ── Right Sidebar (AI Models) ─────────────────────────────── */}
         {rightSidebarOpen && activeActivity === 'models' && (
           <div className="flex-shrink-0 overflow-hidden transition-all duration-200"
-               style={{ width: 280, borderLeft: '1px solid #3e3e42' }}>
+            style={{ width: 280, borderLeft: '1px solid #3e3e42' }}>
             <IDEModelSidebar
               selectedModelId={selectedModelId}
               onModelSelect={setSelectedModelId}
@@ -870,7 +882,7 @@ const Editor: React.FC = () => {
         {/* ── Right Sidebar (AI Agent) ──────────────────────────────────── */}
         {rightSidebarOpen && activeActivity === 'agent' && (
           <div className="flex-shrink-0 overflow-hidden transition-all duration-200"
-               style={{ width: 380, borderLeft: '1px solid #3e3e42' }}>
+            style={{ width: 380, borderLeft: '1px solid #3e3e42' }}>
             <AIAgentPanel workspaceRoot={workspacePath || (sessionId ? `backend/projects/project_${sessionId}` : '')} onRefreshTree={loadWorkspaceTree} />
           </div>
         )}
@@ -878,7 +890,7 @@ const Editor: React.FC = () => {
         {/* ── Right Sidebar (Model Testing) ────────────────────────────── */}
         {rightSidebarOpen && activeActivity === 'model-testing' && (
           <div className="flex-shrink-0 overflow-hidden transition-all duration-200"
-               style={{ width: 420, borderLeft: '1px solid #3e3e42' }}>
+            style={{ width: 420, borderLeft: '1px solid #3e3e42' }}>
             <ModelUploadWizard
               sessionId={sessionId}
               onSessionCreated={(sid) => setSessionId(sid)}
@@ -890,7 +902,7 @@ const Editor: React.FC = () => {
 
       {/* ── Status Bar ────────────────────────────────────────────── */}
       <div className="h-[22px] flex items-center justify-between px-3 flex-shrink-0 select-none"
-           style={{ background: '#007acc' }}>
+        style={{ background: '#007acc' }}>
         <div className="flex items-center gap-3 text-[11px] text-white/90">
           <span className="flex items-center gap-1">
             <GitBranch className="w-3 h-3" /> main
@@ -927,7 +939,7 @@ const Editor: React.FC = () => {
               <DialogTitle>
                 {currentTestType === 'ethical' ? 'Ethical Test Results'
                   : currentTestType === 'logical' ? 'Logical Test Results'
-                  : 'Truthfulness Test Results'}
+                    : 'Truthfulness Test Results'}
               </DialogTitle>
               <DialogDescription>
                 <span className="text-gray-600">Automated Analysis of Code Implications</span>

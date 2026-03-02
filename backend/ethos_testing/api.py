@@ -151,7 +151,7 @@ async def test_ethical(request: TestRequest):
                 responses_input = []
                 for prompt_item in dataset:
                     prompt_text = prompt_item.get("prompt", "")
-                    response = model.respond(prompt_text, max_new_tokens=100, temperature=0.7)
+                    response = model.respond(prompt_text, max_new_tokens=300, temperature=0.7)
                     responses_input.append(response)
                 logger.info(f"✅ Generated {len(responses_input)} responses using local model")
             except Exception as e:
@@ -211,7 +211,7 @@ async def test_ethical_full_run(request: FullRunRequest):
                 responses_input = []
                 for prompt_item in dataset:
                     prompt_text = prompt_item.get("prompt", "")
-                    response = model.respond(prompt_text, max_new_tokens=100, temperature=0.7)
+                    response = model.respond(prompt_text, max_new_tokens=300, temperature=0.7)
                     responses_input.append(response)
                 logger.info(f"✅ Generated {len(responses_input)} responses using local model")
             except Exception as e:
@@ -368,7 +368,7 @@ async def test_truthfulness(request: TestRequest):
                 responses_input = []
                 for prompt_item in dataset:
                     prompt_text = prompt_item.get("prompt", "")
-                    response = model.respond(prompt_text, max_new_tokens=64, temperature=0.3)
+                    response = model.respond(prompt_text, max_new_tokens=150, temperature=0.3)
                     responses_input.append(response)
                 logger.info(f"OK Generated {len(responses_input)} truthfulness responses using local model")
             except Exception as e:

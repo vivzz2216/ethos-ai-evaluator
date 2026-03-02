@@ -69,20 +69,23 @@ class LocalHuggingFaceModel:
                     self.tokenizer.pad_token = self.tokenizer.convert_ids_to_tokens(0)
             
             # Determine model type and load on GPU
+            # GPT-2 in float16 often causes device-side assert due to overflow. Use FP32 for gpt2.
+            dtype = torch.float32 if "gpt2" in self.model_name.lower() else torch.float16
+            
             if is_t5_model:
-                logger.info(f"Detected T5/Seq2Seq model → AutoModelForSeq2SeqLM on cuda:0")
+                logger.info(f"Detected T5/Seq2Seq model → AutoModelForSeq2SeqLM on cuda:0 ({dtype})")
                 self.model_type = "seq2seq"
                 self.model = AutoModelForSeq2SeqLM.from_pretrained(
                     self.model_name,
-                    torch_dtype=torch.float16,   # FP16 to fit in 6GB VRAM
+                    torch_dtype=dtype,
                     device_map={"": 0},           # Force ALL layers to cuda:0 (RTX GPU)
                 )
             else:
-                logger.info(f"Detected CausalLM model → AutoModelForCausalLM on cuda:0")
+                logger.info(f"Detected CausalLM model → AutoModelForCausalLM on cuda:0 ({dtype})")
                 self.model_type = "causal"
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.model_name,
-                    torch_dtype=torch.float16,   # FP16 to fit in 6GB VRAM
+                    torch_dtype=dtype,
                     device_map={"": 0},           # Force ALL layers to cuda:0 (RTX GPU)
                     trust_remote_code=True,       # Required for some models like Phi-2
                 )
@@ -131,42 +134,52 @@ class LocalHuggingFaceModel:
             else:
                 formatted_prompt = prompt
             
-            # Tokenize input
-            inputs = self.tokenizer(formatted_prompt, return_tensors="pt", truncation=True, max_length=512)
-            
-            # Move ALL inputs to cuda:0 (RTX GPU) — always
+            # Tokenize — raise max_length to 768 so long system prompts fit
+            inputs = self.tokenizer(
+                formatted_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=768,
+            )
+
+            # ── KEY FIX: record input length IN TOKENS before GPU transfer ──
+            # We use this to slice out ONLY the new tokens after generation.
+            # This is 100% reliable; string-based startswith() is not.
+            input_length = inputs["input_ids"].shape[1]
+
+            # Move ALL inputs to cuda:0 (RTX GPU)
             inputs = {k: v.to("cuda:0") for k, v in inputs.items()}
-            
-            # Generate response with better parameters
+
+
             generate_kwargs = {
                 "max_new_tokens": max_new_tokens,
-                "min_new_tokens": 20,  # Ensure minimum length
+                "min_new_tokens": 20,
                 "pad_token_id": self.tokenizer.pad_token_id,
-                "num_beams": 4,  # Use beam search for better quality
-                "early_stopping": True,
-                "no_repeat_ngram_size": 3,  # Avoid repetition
+                # NOTE: num_beams + do_sample=True conflict — use sampling only
+                "no_repeat_ngram_size": 3,
             }
+
             
-            # Add temperature and sampling for more diverse responses
             if temperature > 0:
-                generate_kwargs["temperature"] = temperature
                 generate_kwargs["do_sample"] = True
-                generate_kwargs["top_p"] = 0.9
+                generate_kwargs["temperature"] = temperature
+                generate_kwargs["top_p"] = 0.92
                 generate_kwargs["top_k"] = 50
+            else:
+                generate_kwargs["do_sample"] = False
+
             
             if hasattr(self.tokenizer, 'eos_token_id') and self.tokenizer.eos_token_id:
                 generate_kwargs["eos_token_id"] = self.tokenizer.eos_token_id
             
             outputs = self.model.generate(**inputs, **generate_kwargs)
-            
-            # Decode response
-            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            # Remove the original prompt from the response if it's included
-            if generated_text.startswith(formatted_prompt):
-                generated_text = generated_text[len(formatted_prompt):].strip()
-            elif generated_text.startswith(prompt):
-                generated_text = generated_text[len(prompt):].strip()
+
+            # ── Slice by input_length — decode ONLY new tokens ──
+            # This guarantees the prompt is never in the output, regardless of
+            # how the tokenizer round-trips whitespace or special tokens.
+            new_token_ids = outputs[0][input_length:]
+            generated_text = self.tokenizer.decode(new_token_ids, skip_special_tokens=True).strip()
+
             
             # Ensure we have a meaningful response
             if not generated_text or len(generated_text) < 10:
